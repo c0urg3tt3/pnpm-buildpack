@@ -1,0 +1,10 @@
+#!/bin/bash
+
+# Always accept the pnpm buildpack
+BUILD_DIR=${1:-}
+
+if [ -f "${BUILD_DIR}/pnpm-workspace.yaml" ]; then
+  echo "Node.js (Pnpm)" && exit 0
+fi
+
+echo "no" && exit 1

@@ -1,0 +1,95 @@
+#!/bin/bash
+# bin/compile <build-dir> <cache-dir> <env-dir>
+
+echo "------------------"
+echo "| PNPM Buildpack |"
+echo "------------------"
+echo ""
+
+### Configure environment
+
+set -o errexit    # always exit on error
+set -o pipefail   # don t ignore exit codes when piping output
+
+if [ -n "$BUILDPACK_DEBUG" ]; then
+    set -x
+fi
+
+unset GIT_DIR     # Avoid GIT_DIR leak from previous build steps
+
+### Constants
+
+BUILD_DIR=${1:-}
+CACHE_DIR=${2:-}
+ENV_DIR=${3:-}
+BP_DIR=$(cd "$(dirname "${0:-}")"; cd ..; pwd)
+
+echo "-----> Copie des variables d'environnement"
+echo ""
+
+mkdir -p "$BUILD_DIR/.profile.d"
+cp "$BP_DIR"/profile/* "$BUILD_DIR/.profile.d/"
+
+echo "-----> Installallation de node@16.14.2"
+echo ""
+
+NODE_BUILD_DIR="$BUILD_DIR/.scalingo/node/"
+NODE_BIN_DIR="$NODE_BUILD_DIR/bin"
+
+mkdir -p "$NODE_BIN_DIR"
+
+code=$(curl https://nodejs.org/dist/v16.14.2/node-v16.14.2-linux-x64.tar.xz -L --silent --fail --retry 5 --retry-max-time 15 -o /tmp/node.tar.xz --write-out "%{http_code}")
+
+if [ "$code" != "200" ]; then
+  echo "Unable to download node: $code" && false
+fi
+
+echo "-----> Décompression de node@16.14.2"
+echo ""
+
+rm -rf "${NODE_BUILD_DIR:?}"/*
+tar -xJvf /tmp/node.tar.xz --strip-components 1 -C "$NODE_BUILD_DIR"
+
+echo ""
+echo "-----> Ajout des executables mis à disposition par nodejs au PATH"
+echo ""
+
+export PATH=$NODE_BIN_DIR:$PATH
+
+echo "-----> Version de Node"
+echo ""
+
+node -v 
+
+echo ""
+echo "-----> Installation de pnpm@6.32.9"
+
+npm i -g pnpm@6.32.9
+
+echo ""
+echo "-----> Version de Pnpm"
+echo ""
+
+pnpm --version
+
+echo ""
+echo "-----> Configuration de pnpm"
+echo ""
+
+# PNPM_STORE_DIR="$BUILD_DIR"/.pnpm-store
+# pnpm config set store-dir "$PNPM_STORE_DIR"
+
+# echo "$PNPM_STORE_DIR"
+# echo ""
+
+cd "$BUILD_DIR"
+
+echo "-----> Installation des dépendances du projet"
+echo ""
+
+pnpm install --unsafe-perm
+
+echo ""
+echo "-----> Construction du projet"
+
+pnpm build
